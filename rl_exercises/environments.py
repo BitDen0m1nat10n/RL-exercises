@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, SupportsFloat
 
+import itertools
+
 import gymnasium as gym
 import numpy as np
 
@@ -189,7 +191,7 @@ class MarsRover(gym.Env):
             The resulting state.
         """
         # TODO: Implement the environment dynamics to determine the next state
-        return state
+        return min(max(0, state - 1 + 2 * action), len(self.states) - 1)
 
     def get_transition_matrix(
         self,
@@ -220,6 +222,11 @@ class MarsRover(gym.Env):
 
         nS, nA = len(S), len(A)
         T = np.zeros((nS, nA, nS), dtype=float)
+        for state, action in itertools.product(self.states, self.actions):
+            T[state, action, self.get_next_state(state, action)] = self.P[state, action]
+            T[state, action, self.get_next_state(state, 1 - action)] = (
+                1 - self.P[state, action]
+            )
         # TODO: Determine the transition matrix using the get_next_state function
         # and the transition probabilities P.
 
