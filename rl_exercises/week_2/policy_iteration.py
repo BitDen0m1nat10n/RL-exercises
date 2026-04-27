@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 import warnings
+from itertools import count, product
 
 import numpy as np
+from more_itertools import first
 from rich import print as printr
 from rl_exercises.agent import AbstractAgent
 from rl_exercises.environments import MarsRover
@@ -85,15 +87,18 @@ class PolicyIteration(AbstractAgent):
         tuple[int, dict]
             The selected action and an empty info dictionary.
         """
-        # TODO: Return the action according to current policy
-        raise NotImplementedError("predict_action() is not implemented.")
+        if not evaluate:
+            return self.pi[observation]
+        raise NotImplementedError(
+            "predict_action() Evaluation mode is not implemented."
+        )
 
     def update_agent(self, *args: tuple, **kwargs: dict) -> None:
         """Run policy iteration to compute the optimal policy and state-action values."""
         if not self.policy_fitted:
-            # TODO: Call policy iteration with initialized values
             printr("Initial policy: ", self.pi)
-            raise NotImplementedError("update_agent() is not implemented.")
+            MDP = self.S, self.A, self.T, self.R_sa, self.gamma
+            self.Q, self.pi, self.steps = policy_iteration(self.Q, self.pi, MDP)
             printr("Q: ", self.Q)
             printr("Final policy: ", self.pi)
             printr("Policy iteration steps:", self.steps)
@@ -158,7 +163,17 @@ def policy_evaluation(
     nS = R_sa.shape[0]
     V = np.zeros(nS)
 
-    # TODO: implement Policy Evaluation for all states
+    while True:
+        V_old = V
+        for state in range(nS):
+            action = pi[state]
+            V[state] = sum(
+                probability * (R_sa[state, action] + gamma * V_old[result_state])
+                for result_state, probability in enumerate(T[state, action, :])
+            )
+
+        if all(abs(v - v_old) < epsilon for v, v_old in zip(V, V_old)):
+            break
 
     return V
 
@@ -190,8 +205,17 @@ def policy_improvement(
     """
     nS, nA = R_sa.shape
     Q = np.zeros((nS, nA))
-    pi_new = None
-    # TODO: implement Policy Improvement for all states
+    for state, action in product(range(nS), range(nA)):
+        Q[state, action] = R_sa[state, action] + sum(
+            probability * V[result_state]
+            for result_state, probability in enumerate(T[state, action, :])
+        )
+    pi_new = np.zeros((nS,), int)
+    for state in range(nS):
+        max_Q = max(Q[state, :])
+        pi_new[state] = first(
+            (action for action, q in enumerate(range(nA)) if q == max_Q)
+        )
 
     return Q, pi_new
 
@@ -223,7 +247,18 @@ def policy_iteration(
     """
     S, A, T, R_sa, gamma = MDP
 
-    # TODO: Combine evaluation and improvement in a loop.
+    for i in count():
+        V = policy_evaluation(pi, T, R_sa, gamma, epsilon)
+
+        Q, pi_new = policy_improvement(V, T, R_sa, gamma)
+
+        if pi_new == pi:
+            return (
+                Q,
+                pi,
+            )
+        else:
+            pi = pi_new
 
 
 if __name__ == "__main__":
