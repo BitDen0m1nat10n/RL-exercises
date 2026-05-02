@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Tuple
 
+from itertools import product
+
 import gymnasium
 import numpy as np
+from more_itertools import first
 from rich import print as printr
 from rl_exercises.agent import AbstractAgent
 from rl_exercises.environments import MarsRover
@@ -64,14 +67,15 @@ class ValueIteration(AbstractAgent):
         if self.policy_fitted:
             return
 
-        # TODO: Call value_iteration() with the MDP components
-        V_opt, pi_opt = None, None  # placeholder
+        V_opt, pi_opt = value_iteration(
+            T=self.T, R_sa=self.R_sa, gamma=self.gamma, seed=self.seed
+        )
 
         self.V = V_opt
         self.pi = pi_opt
         printr("Converged V:", self.V)
         printr("Derived policy π:", self.pi)
-        # self.policy_fitted = True # TODO: uncomment this after implementation
+        self.policy_fitted = True
 
     def predict_action(
         self,
@@ -83,8 +87,7 @@ class ValueIteration(AbstractAgent):
         if not self.policy_fitted:
             self.update_agent()
 
-        # TODO: Return action from learned policy
-        raise NotImplementedError("predict_action() is not implemented.")
+        return self.pi[observation], {}
 
 
 def value_iteration(
@@ -127,8 +130,26 @@ def value_iteration(
     # rng = np.random.default_rng(seed)  uncomment this
     pi = None
 
-    # TODO: update V using the Q values until convergence
+    while True:
+        V_new = np.zeros(n_states, dtype=float)
+        for state in range(n_states):
+            V_new[state] = max(
+                R_sa[state, action] + gamma * sum(T[state, action, :] * V[:])
+                for action in range(n_actions)
+            )
+        V = V_new
+        if all(abs(V_new - V) < epsilon):
+            break
 
-    # TODO: Extract the greedy policy from V and update pi
+    Q = np.zeros((n_states, n_actions), dtype=float)
+    for state, action in product(range(n_states), range(n_actions)):
+        Q[state, action] = R_sa[state, action] + sum(T[state, action, :] * V[:])
+
+    pi = np.zeros((n_states,), int)
+    for state in range(n_states):
+        max_Q = max(Q[state, :])
+        pi[state] = first(
+            (action for action, q in enumerate(Q[state, :]) if q == max_Q)
+        )
 
     return V, pi

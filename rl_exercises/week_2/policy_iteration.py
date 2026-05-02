@@ -34,7 +34,7 @@ class PolicyIteration(AbstractAgent):
 
     def __init__(
         self,
-        env: MarsRover,
+        env: MarsRover,  # TODO: correct to gym.Env?
         gamma: float = 0.9,
         seed: int = 333,
         filename: str = "policy.npy",
@@ -88,7 +88,11 @@ class PolicyIteration(AbstractAgent):
             The selected action and an empty info dictionary.
         """
         if not evaluate:
-            return self.pi[observation]
+            return self.pi[observation], {}
+        return (
+            self.pi[observation],
+            {},
+        )  # TODO: wouldn't it be better, to throw an error, since there is no evaluation implemented?
         raise NotImplementedError(
             "predict_action() Evaluation mode is not implemented."
         )
@@ -168,11 +172,10 @@ def policy_evaluation(
         for state in range(nS):
             action = pi[state]
             V[state] = sum(
-                probability * (R_sa[state, action] + gamma * V_old[result_state])
-                for result_state, probability in enumerate(T[state, action, :])
+                T[state, action, :] * (R_sa[state, action] + gamma * V_old[:])
             )
 
-        if all(abs(v - v_old) < epsilon for v, v_old in zip(V, V_old)):
+        if all(abs(V - V_old) < epsilon):
             break
 
     return V
@@ -214,7 +217,7 @@ def policy_improvement(
     for state in range(nS):
         max_Q = max(Q[state, :])
         pi_new[state] = first(
-            (action for action, q in enumerate(range(nA)) if q == max_Q)
+            (action for action, q in enumerate(Q[state, :]) if q == max_Q)
         )
 
     return Q, pi_new
@@ -252,11 +255,8 @@ def policy_iteration(
 
         Q, pi_new = policy_improvement(V, T, R_sa, gamma)
 
-        if pi_new == pi:
-            return (
-                Q,
-                pi,
-            )
+        if all(pi_new[state] == pi[state] for state in range(len(pi))):
+            return Q, pi, i
         else:
             pi = pi_new
 
