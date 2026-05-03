@@ -65,7 +65,13 @@ def train(cfg: DictConfig) -> float:
     elif cfg.agent == "value_iteration":  # TODO: use more config params?
         agent = ValueIteration(env)
     elif cfg.agent == "sarsa":
-        agent = TDAgent(env, EpsilonGreedyPolicy(env, 0.1))  # TODO: set epsilon
+        agent = TDAgent(
+            env, EpsilonGreedyPolicy(env, 0.1), algorithm="sarsa"
+        )  # TODO: set epsilon
+    elif cfg.agent == "qlearning":
+        agent = TDAgent(
+            env, EpsilonGreedyPolicy(env, 0.1), algorithm="qlearning"
+        )  # TODO: set epsilon
     else:
         # TODO: add your agent options here
         raise NotImplementedError
