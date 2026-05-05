@@ -60,4 +60,8 @@ class EpsilonGreedyPolicy(object):
         if self.rng.random() < self.epsilon:
             return self.rng.integers(low=0, high=len(Q[state]))
         else:
-            return int(np.argmax(Q[state]))
+            return int(np.argmax(list(Q[state])))
+            max_q = max(list(Q[state]))
+            return [action for action, q_value in Q[state].items() if q_value == max_q][
+                0
+            ]

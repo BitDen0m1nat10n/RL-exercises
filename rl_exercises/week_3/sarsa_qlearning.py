@@ -63,7 +63,7 @@ class TDAgent(AbstractAgent):
         self, state: np.array, info: dict = {}, evaluate: bool = False
     ) -> Any:  # type: ignore # noqa
         """Predict the action for a given state"""
-        return self.policy(self.Q, state, evaluate=evaluate), info
+        return self.policy(self.Q, tuple(state), evaluate=evaluate), info
 
     def save(self, path: str) -> Any:  # type: ignore
         """Save the Q table
@@ -105,6 +105,8 @@ class TDAgent(AbstractAgent):
             New Q value for the state action pair
         """
         state, action, reward, next_state, done, _ = batch[0]
+        state = tuple(state)
+        next_state = tuple(state)
         if self.algorithm == "sarsa":
             next_action, next_info = self.predict_action(next_state)
             return self.SARSA(state, action, reward, next_state, next_action, done)

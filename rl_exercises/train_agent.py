@@ -1,6 +1,6 @@
 # Ignore "imported but unused"
 # flake8: noqa: F401
-from typing import Any, List, SupportsFloat
+from typing import Any, List, SupportsFloat, Tuple
 
 import os
 import warnings
@@ -8,13 +8,17 @@ from functools import partial
 
 import gymnasium as gym
 import hydra
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import rl_exercises
+import rliable
 from gymnasium.core import Env
 from gymnasium.wrappers import TimeLimit
 from hydra.utils import get_class
+from matplotlib.pylab import average
 from minigrid.wrappers import FlatObsWrapper
+from numpy.ma import floor, sqrt
 from omegaconf import DictConfig, OmegaConf
 from rich import print as printr
 from rl_exercises.agent import AbstractAgent, RandomAgent
@@ -23,6 +27,7 @@ from rl_exercises.environments import MarsRover
 from rl_exercises.week_2.policy_iteration import PolicyIteration
 from rl_exercises.week_2.value_iteration import ValueIteration
 from rl_exercises.week_3 import EpsilonGreedyPolicy, TDAgent
+from rliable import plot_utils
 
 # from rl_exercises.week_4 import EpsilonGreedyPolicy as TabularEpsilonGreedyPolicy
 # from rl_exercises.week_4 import SARSAAgent
@@ -36,7 +41,7 @@ from tqdm import tqdm
 
 
 @hydra.main("configs", "base", version_base="1.1")  # type: ignore[misc]
-def train(cfg: DictConfig) -> float:
+def train(cfg: DictConfig) -> Tuple[float, dict]:
     """Train the agent.
 
     Parameters
@@ -121,7 +126,11 @@ def train(cfg: DictConfig) -> float:
     )
     final_eval = evaluate(env, agent, cfg.n_eval_episodes)
     print(f"Final eval reward was: {final_eval}")
-    return final_eval
+
+    eval_reward_buffer["eval_steps"].append(cfg.training_steps)
+    eval_reward_buffer["eval_rewards"].append(final_eval)
+
+    return final_eval, eval_reward_buffer
 
 
 def train_sb3(env: gym.Env, cfg: DictConfig) -> float:
@@ -234,5 +243,85 @@ def make_env(env_name: str, env_kwargs: dict = {}) -> gym.Env:
     return env
 
 
+def get_dist_partition_estimate(samples: list[float], percentage: float) -> float:
+    assert len(samples) >= 1
+    assert 0.0 <= percentage and percentage < 1.0
+
+    sorted_samples = sorted(samples)
+    extended_samples = [sorted_samples[0], *sorted_samples, sorted_samples[-1]]
+    sample_point = percentage * len(samples) + 0.5
+    smaller_index = int(floor(sample_point))
+    greater_weight = sample_point - smaller_index
+
+    return (
+        extended_samples[smaller_index] * (1 - greater_weight)
+        + extended_samples[smaller_index + 1] * greater_weight
+    )
+
+
+@hydra.main("configs", "base", version_base="1.1")  # type: ignore[misc]
+def train_all_agents(cfg: DictConfig):
+
+    algorithms = [
+        "random",
+        # "policy_iteration",
+        # "value_iteration",
+        "sarsa",
+        "qlearning",
+    ]
+    eval_reward_buffers = {}
+    for algorithm in algorithms:
+        eval_reward_buffers[algorithm] = []
+        cfg.agent = algorithm
+        for _ in range(1):  # TODO: use config parameter for eval count
+            eval_reward_buffers[algorithm].append(train(cfg)[1])
+
+    print(eval_reward_buffers[algorithms[0]][0])
+
+    frames = eval_reward_buffers[algorithms[0]][0]["eval_steps"]
+    assert all(
+        all(b == f for b, f in zip(buffer["eval_steps"], frames))
+        for algorithm in algorithms
+        for buffer in eval_reward_buffers[algorithm]
+    )
+    collected_samples = dict(
+        (
+            algorithm,
+            [
+                [run["eval_rewards"][step] for run in eval_reward_buffers[algorithm]]
+                for step in range(len(frames))
+            ],
+        )
+        for algorithm in algorithms
+    )
+    point_estimates = dict(
+        (algorithm, [average(samples) for step, samples in enumerate(data)])
+        for algorithm, data in collected_samples.items()
+    )
+    interval_estimates = dict(
+        (
+            algorithm,
+            (
+                [
+                    get_dist_partition_estimate(step_samples, 0.05)
+                    for step_samples in data
+                ],
+                [
+                    get_dist_partition_estimate(step_samples, 0.95)
+                    for step_samples in data
+                ],
+            ),
+        )
+        for algorithm, data in collected_samples.items()
+    )
+
+    # Plot sample efficiency curves
+    fig, ax = plt.subplots(figsize=(10, 6))
+    plot_utils.plot_sample_efficiency_curve(
+        frames, point_estimates, interval_estimates, ax=ax
+    )
+    plt.show()
+
+
 if __name__ == "__main__":
-    train()
+    train_all_agents()

@@ -34,7 +34,7 @@ class PolicyIteration(AbstractAgent):
 
     def __init__(
         self,
-        env: MarsRover,  # TODO: correct to gym.Env?
+        env: MarsRover,  # TODO: correct to ?
         gamma: float = 0.9,
         seed: int = 333,
         filename: str = "policy.npy",
